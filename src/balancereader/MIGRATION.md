@@ -93,6 +93,22 @@ No test was deleted or weakened; the existing test file needed no changes at all
   - Inserting a new transaction into the ledger and re-reading the balance →
     `12400`, i.e. the background `LedgerReader` thread and the cache update
     still work.
+- Full end-to-end test of the whole application: the upgraded service was run
+  alongside the seven other, unchanged services and driven through the web UI.
+  A deposit and a payment made through the old services were read back through
+  the upgraded one and displayed to the cent. The old and the new version of the
+  service were also run side by side against the same database and their answers
+  compared request by request: 13 of 15 were byte-for-byte identical.
+
+### The one behaviour that is not identical
+
+When the service is sent a completely malformed login token (not just a wrong
+one, but text that is not a token at all), the old version returned a generic
+"server error" and the new version returns "not authorised". Both versions
+refuse the request, so nobody gains access who did not have it before; the new
+answer is simply the more accurate one. This comes from the updated token
+library and is considered an improvement rather than a defect. Anything that
+reads the service's error codes should be aware of it.
 
 ## Risks to validate before/at rollout
 
@@ -116,6 +132,9 @@ No test was deleted or weakened; the existing test file needed no changes at all
    real PostgreSQL instance and returned identical results, but a load test
    against production-like data volumes is recommended to confirm query plans
    and connection-pool behaviour.
-5. **Rollback.** The change is contained in one service and one image tag, so
+5. **Error-code consumers.** As noted above, a malformed token now yields "not
+   authorised" instead of "server error". Confirm no dashboard, alert, or
+   client treats those two cases differently.
+6. **Rollback.** The change is contained in one service and one image tag, so
    rollback is simply redeploying the previous `balancereader` image; no data
    migration is involved.
