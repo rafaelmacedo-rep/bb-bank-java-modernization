@@ -32,11 +32,11 @@ Kubernetes manifests, and the CI workflows were left alone.
 | `spring-boot-starter-parent` | 2.3.1.RELEASE | 3.5.16 | Latest supported Spring Boot 3.x |
 | `java.version` | 1.8 | 21 | Target the current Java LTS |
 | Spring Cloud GCP starters | `org.springframework.cloud:spring-cloud-gcp-*` (Hoxton.SR5) | `com.google.cloud:spring-cloud-gcp-*` (BOM 5.13.11) | Google moved these artifacts to their own coordinates/release train; the Hoxton line does not support Spring Boot 3 |
-| Spring Cloud release train | Hoxton.SR5 | 2025.1.2 | Only the current train is compatible with Boot 3.5 |
+| Spring Cloud release train | Hoxton.SR5 | removed | Nothing in this service uses a plain Spring Cloud artifact once the GCP starters move to Google's own BOM, so the import is dead weight |
 | `micrometer-registry-stackdriver` | pinned to `${micrometer.version}` | version managed by Spring Boot | Avoids a hand-maintained version that can drift out of sync with the framework |
 | log4j2 | 2.17.1 | 2.26.0 | Security/bugfix updates |
 | Guava | 30.1.1-jre | 32.1.3-jre | Java 21 compatibility |
-| Jackson databind | 2.11.0 | 2.19.2 | Required by Boot 3 |
+| Jackson databind | 2.11.0 | version managed by Spring Boot | Jackson's modules must all be on one version; letting the framework pick it prevents a mismatch |
 | Lettuce | 5.2.1 | 6.8.2 | Java 21 / Boot 3 compatibility |
 | `java-jwt` (Auth0) | 3.9.0 | 4.5.2 | Supported line; same API surface used here |
 | Mockito | 2.7.2 | 5.20.0 | Mockito 2 cannot instrument Java 21 classes |
@@ -64,10 +64,13 @@ The Java 21 base image is therefore configured there:
   Micrometer Tracing, whose default exporter is Zipkin; without this exclusion
   the service would try to ship traces to a non-existent local Zipkin server.
   Tracing still goes to Google Cloud Trace via the GCP trace starter.
-- `application.properties`: added `spring.cloud.gcp.trace.enabled=${ENABLE_TRACING}`
-  so the existing `ENABLE_TRACING` toggle keeps working (the old
-  `spring.sleuth.*` keys are no longer read by the framework; they are left in
-  place, and ignored, to keep the diff minimal).
+- `application.properties`: the tracing settings were rewritten from the old
+  `spring.sleuth.*` names to the `management.tracing.*` names the new framework
+  reads, so the existing `ENABLE_TRACING` toggle and the "trace every request"
+  sampling rate both keep working. Leaving the old names in place would have
+  silently dropped tracing to one request in ten. The old rule that skipped
+  tracing for `cleanup*` and `favicon` URLs was dropped rather than rebuilt:
+  this service serves no such URLs, so it never had an effect here.
 - `checkstyle.xml`: the `LineLength` rule moved from inside `TreeWalker` to the
   top level. Newer Checkstyle versions reject the old placement. The rule itself
   is unchanged (still 80 characters), so linting is exactly as strict as before.
