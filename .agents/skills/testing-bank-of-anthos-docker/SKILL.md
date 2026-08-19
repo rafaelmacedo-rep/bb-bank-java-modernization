@@ -43,6 +43,11 @@ key locally is what lets you mint your own tokens for authorization tests.
 4. Ledger services need `LOCAL_ROUTING_NUM=883745000` to match the seeded data,
    plus `SPRING_DATASOURCE_URL/USERNAME/PASSWORD`
    (`jdbc:postgresql://ledger-db:5432/postgresdb`, `admin` / `password`).
+   **`accounts-db` needs `LOCAL_ROUTING_NUM` too**: its
+   `initdb/1-load-testdata.sh` aborts with `Error: environment variable
+   'LOCAL_ROUTING_NUM' not set. Aborting.` and the container exits *after*
+   creating the schema, so `users`/`contacts` end up empty and login fails
+   with a confusing error. Pass it to **both** databases.
 5. Demo login is `testuser` / `password`; set `DEFAULT_USERNAME`/`DEFAULT_PASSWORD`
    on the frontend to prefill it.
 
@@ -121,6 +126,51 @@ header yields **400** (`MissingRequestHeaderException`), not 401.
   serves traffic; no traces are exported and nothing needs network at startup.
 - With tracing/metrics off, `Your default credentials were not found` warnings
   and Mockito's Java 21 self-attach warning are expected noise, not failures.
+
+## 7. Service-specific notes: `transactionhistory`
+
+Everything above (hostname workaround, JWT cases, side-by-side diffing) applies
+unchanged — `TransactionHistoryApplication.resourceLabels()` has the same
+`indexOf("-")` crash as `balancereader`, so `--hostname transactionhistory-0`
+plus `-e NAMESPACE=default` is still mandatory.
+
+- Extra env vars beyond the ledger set: `POLL_MS=100`, `CACHE_SIZE=1000`,
+  `CACHE_MINUTES=60`, `HISTORY_LIMIT=100`, and `VERSION` (the `/version`
+  endpoint echoes `$VERSION` verbatim — it is **not** baked into the image, so
+  the locally built image reports whatever you pass; use the same value on both
+  containers or `/version` will "differ" for no reason).
+- Two `transactionhistory` containers can run against the same `ledger-db`
+  simultaneously (both only read plus poll), which is what makes the
+  old-vs-new diff a single-DB comparison.
+- The response is `Deque<Transaction>` built from a JPQL query declared to
+  return `LinkedList` (`TransactionRepository.findForAccount`), and the
+  background reader mutates it in place (`addFirst`, then `removeLast` past
+  `HISTORY_LIMIT`). Spring Data JPA 3 still returns a real mutable
+  `LinkedList`, so this works — but it is the highest-risk part of the upgrade:
+  always prove it at runtime, not just with unit tests. A regression here shows
+  up as `UnsupportedOperationException` in the logs and rows that only appear
+  after a restart. Grep `docker logs` for it explicitly.
+- To exercise `HISTORY_LIMIT` trimming, run a third container with
+  `HISTORY_LIMIT=3`, warm the cache with one request, then add transactions:
+  the list must stay at 3 with the newest first and the oldest gone.
+- Direct `INSERT`s into `transactions` must supply `timestamp` explicitly —
+  the column is `NOT NULL` with no default (the entity sets it via Hibernate
+  `@CreationTimestamp`), otherwise you get
+  `null value in column "timestamp" violates not-null constraint`.
+- For the cross-routing exclusion test the non-local routing number must be on
+  the **side that matches the account** (e.g. `to_acct=<account>` with
+  `to_route=111111111`). A row with a local route on the matching side is
+  matched no matter what the other side's route is.
+- Nice UI parity demo: switching `HISTORY_API_ADDR` between the old and new
+  containers and reloading `/home` shows the same table twice. Docker cannot
+  change env vars in place, so `docker rm -f frontend` and re-run it.
+- After submitting a payment/deposit the immediate post-redirect render can
+  lose the race with the ~100 ms poll, so the new row may be missing on that
+  first page. Reload once before calling it a failure.
+- Parity-diff normalisation caution: `timestamp` appears **both** in Spring's
+  generated error bodies (per-request wall clock — can never match) and in
+  every transaction row (real DB data — must match exactly). Normalise only
+  the error-object bodies, or you will hide a genuine date-format regression.
 
 ## Devin Secrets Needed
 

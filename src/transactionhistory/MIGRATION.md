@@ -109,7 +109,9 @@ straight from the database layer into its cache and then modifies it in place:
   cached list to keep it at `HISTORY_LIMIT` entries. Nothing in the new stack
   substitutes an immutable list there, so the newest-first ordering and the
   trimming behaviour are unchanged. Both were confirmed against a real database
-  in the end-to-end test below.
+  in the end-to-end test below — a regression here would have surfaced as rows
+  appearing only after a restart, which is why it was tested at runtime and not
+  just in unit tests.
 
 ## How this was verified
 
@@ -122,11 +124,33 @@ straight from the database layer into its cache and then modifies it in place:
 - End-to-end test of the whole application with plain Docker: the upgraded
   service was run alongside the other, unchanged services (`ledger-db`,
   `frontend` and the rest) and driven through the web UI, and the endpoints were
-  called directly with valid and invalid login tokens.
+  called directly with valid and invalid login tokens. A deposit and a payment
+  made through the unchanged services appeared as the newest entry of the
+  upgraded service's history within the polling interval and without a restart,
+  which is what proves the in-place list mutation described above still works.
+  Trimming to `HISTORY_LIMIT`, newest-first ordering, a cold recompute after a
+  restart, and the exclusion of transactions belonging to another bank were all
+  confirmed against the real database.
 - The old (Java 8) and the new (Java 21) version of the service were run side by
   side against the **same** database and their answers compared request by
-  request. The results of that comparison are recorded in the pull request for
-  this change.
+  request: **13 of 15 responses were byte-for-byte identical**, including every
+  successful history response (same field order, same date format, same row
+  order, same rows). The full table is in the pull request for this change.
+
+### The two answers that are not identical
+
+Both are the same accepted Spring Boot 3 default changes already recorded for
+the balance-reader (`docs/devin-process/BUGS.md` B9 and B10), and neither
+changes who is allowed in:
+
+- A completely malformed login token (text that is not a token at all) is now
+  answered with "not authorised" instead of "server error". Both versions refuse
+  the request; the new answer is simply the more accurate one.
+- When the login token is missing entirely, the error response no longer
+  contains an empty `"message"` field. Appearance only — the status code and
+  every other field are unchanged.
+
+Anything that reads this service's error codes should be aware of the first one.
 
 ## Risks to validate before/at rollout
 
