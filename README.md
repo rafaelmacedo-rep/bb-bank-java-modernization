@@ -165,3 +165,21 @@ See the [Development guide](./docs/development.md) to learn how to run and devel
 - [Tutorial - Migrate for Anthos - Migrating a monolith VM to GKE](https://cloud.google.com/migrate/anthos/docs/migrating-monolith-vm-overview-setup)
 - [Google Cloud Architecture Center - Running distributed services on GKE private clusters using Anthos Service Mesh](https://cloud.google.com/architecture/distributed-services-on-gke-private-using-anthos-service-mesh)
 - [Google Cloud Next '20 - Hands-on Keynote](https://www.youtube.com/watch?v=7QR1z35h_yc)  (Anthos, Cloud Operations, Spring Cloud GCP, BigQuery, AutoML)
+
+## Modernization with Devin
+
+This fork is used to modernize the Java services one at a time. The process is
+documented for non-technical readers:
+
+- [docs/devin-process/DEVELOPMENT.md](./docs/devin-process/DEVELOPMENT.md) — a
+  chronological log of every step, which Devin capability was used, and where
+  the evidence is.
+- [docs/devin-process/BUGS.md](./docs/devin-process/BUGS.md) — every problem
+  found, its cause, and how it was fixed.
+- [docs/devin-process/EVIDENCE.md](./docs/devin-process/EVIDENCE.md) — how to
+  prove the upgrade worked, including the commands to reproduce it.
+
+**Current status:** `balancereader` (balance-reader) runs on **Java 21 /
+Spring Boot 3.5.16**. `transactionhistory` (transaction-history) and
+`ledgerwriter` (ledger-writer) remain on **Java 8 / Spring Boot 2.3.1** by
+design, and are the next services to be migrated.
