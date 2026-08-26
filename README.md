@@ -179,7 +179,7 @@ documented for non-technical readers:
 - [docs/devin-process/EVIDENCE.md](./docs/devin-process/EVIDENCE.md) — how to
   prove the upgrade worked, including the commands to reproduce it.
 
-**Current status:** `balancereader` (balance-reader) runs on **Java 21 /
-Spring Boot 3.5.16**. `transactionhistory` (transaction-history) and
-`ledgerwriter` (ledger-writer) remain on **Java 8 / Spring Boot 2.3.1** by
-design, and are the next services to be migrated.
+**Current status:** `balancereader` (balance-reader) and `transactionhistory`
+(transaction-history) run on **Java 21 / Spring Boot 3.5.16**. `ledgerwriter`
+(ledger-writer) remains on **Java 8 / Spring Boot 2.3.1** by design and is the
+next service to be migrated.
